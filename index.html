@@ -164,6 +164,10 @@
     const bgMusic = document.getElementById('bg-music');
     const muteBtn = document.getElementById('mute-btn');
 
+    // Dokładny czas trwania budowania serca w sekundach (identyczny na każdym telefonie i PC)
+    const BUILD_DURATION_SEC = 14.0;
+    const CENTER_FADE_DURATION_SEC = 1.6;
+
     const PHRASES = [
       "I love you", "Kocham cię", "Te amo", "Je t'aime",
       "Ti amo", "Eu te amo", "사랑해", "愛してる",
@@ -215,12 +219,13 @@
     let width, height, dpr, baseScale;
     let words = [];
     let bgHearts = [];
-    let visibleCount = 0;
+    let progress = 0; // Postęp od 0.0 do 1.0 (niezależny od FPS i rozmiaru ekranu)
     let centerTextAlpha = 0;
     let centerRelY = 0;
     let pointer = { x: -1000, y: -1000, active: false };
-    let pulsePhase = 0;
+    let pulseTime = 0;
     let isStarted = false;
+    let lastTimestamp = 0;
 
     function getParametricHeart(t) {
       const x = 16 * Math.pow(Math.sin(t), 3);
@@ -251,8 +256,8 @@
           x: Math.random() * width,
           y: Math.random() * height,
           size: 8 + Math.random() * 18,
-          speedY: 0.2 + Math.random() * 0.45,
-          swaySpeed: 0.008 + Math.random() * 0.015,
+          speedY: 14 + Math.random() * 26, // Piksele na sekundę (zamiast na klatkę)
+          swaySpeed: 0.5 + Math.random() * 0.9,
           swayRange: 15 + Math.random() * 25,
           phase: Math.random() * Math.PI * 2,
           alpha: 0.1 + Math.random() * 0.2,
@@ -460,13 +465,15 @@
 
       startScreen.classList.add('hidden');
       uiControls.classList.add('visible');
-      animate();
+      lastTimestamp = performance.now();
+      requestAnimationFrame(animate);
     }
 
     function restartAnimation() {
-      visibleCount = 0;
+      progress = 0;
       centerTextAlpha = 0;
-      pulsePhase = 0;
+      pulseTime = 0;
+      lastTimestamp = performance.now();
 
       bgMusic.currentTime = 0;
       if (!bgMusic.muted) {
@@ -527,17 +534,22 @@
       ctx.restore();
     }
 
-    function animate() {
+    function animate(timestamp) {
       if (!isStarted) return;
+
+      // Rzeczywisty upływ czasu między klatkami w sekundach (zabezpieczony przed skokiem po zmianie karty)
+      const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
+      lastTimestamp = timestamp;
 
       const theme = THEMES[currentThemeIndex];
       ctx.fillStyle = '#020205';
       ctx.fillRect(0, 0, width, height);
 
+      // 1. Serduszka w tle animowane względem czasu rzeczywistego (dt)
       for (let i = 0; i < bgHearts.length; i++) {
         const h = bgHearts[i];
-        h.y -= h.speedY;
-        h.phase += h.swaySpeed;
+        h.y -= h.speedY * dt;
+        h.phase += h.swaySpeed * dt;
         const currentX = h.x + Math.sin(h.phase) * h.swayRange;
 
         if (h.y < -30) {
@@ -559,28 +571,31 @@
       ctx.fillStyle = bgGlow;
       ctx.fillRect(0, 0, width, height);
 
-      // Mikro korekta prędkości (0.31 zamiast 0.28)
-      if (visibleCount < words.length) {
-        visibleCount += 0.31;
+      // 2. Postęp oparty o czas rzeczywisty (zawsze 14 sekund na telefonie 120Hz i PC 60Hz)
+      if (progress < 1) {
+        progress = Math.min(1, progress + dt / BUILD_DURATION_SEC);
       } else {
         if (centerTextAlpha < 1) {
-          centerTextAlpha = Math.min(1, centerTextAlpha + 0.015);
+          centerTextAlpha = Math.min(1, centerTextAlpha + dt / CENTER_FADE_DURATION_SEC);
         }
-        pulsePhase += 0.04;
+        pulseTime += dt * 2.4;
       }
 
-      const beat = visibleCount >= words.length
-        ? 1 + Math.pow(Math.sin(pulsePhase), 6) * 0.032
+      const beat = progress >= 1
+        ? 1 + Math.pow(Math.sin(pulseTime), 6) * 0.032
         : 1;
 
-      const limit = Math.min(Math.floor(visibleCount), words.length);
+      const limit = Math.floor(progress * words.length);
       const visibleWords = words.slice(0, limit);
       visibleWords.sort((a, b) => b.depthLayer - a.depthLayer);
+
+      // Sprężysty powrót po dotyku niezależny od FPS
+      const damping = Math.pow(0.002, dt);
 
       for (let i = 0; i < visibleWords.length; i++) {
         const w = visibleWords[i];
         if (w.alpha < w.maxAlpha) {
-          w.alpha = Math.min(w.maxAlpha, w.alpha + 0.025);
+          w.alpha = Math.min(w.maxAlpha, w.alpha + dt * 1.4 * w.maxAlpha);
         }
 
         const targetX = originX + w.relX * beat;
@@ -594,13 +609,13 @@
 
           if (dist < radius && dist > 0) {
             const force = (radius - dist) / radius;
-            w.offsetX += (dx / dist) * force * 3.8 * w.parallaxFactor;
-            w.offsetY += (dy / dist) * force * 3.8 * w.parallaxFactor;
+            w.offsetX += (dx / dist) * force * 220 * dt * w.parallaxFactor;
+            w.offsetY += (dy / dist) * force * 220 * dt * w.parallaxFactor;
           }
         }
 
-        w.offsetX *= 0.9;
-        w.offsetY *= 0.9;
+        w.offsetX *= damping;
+        w.offsetY *= damping;
 
         drawNeonWord(w, targetX + w.offsetX, targetY + w.offsetY);
       }
