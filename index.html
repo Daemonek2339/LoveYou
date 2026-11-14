@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Heart of Languages - Neon 3D</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #020205;
+      overflow: hidden;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Ekran startowy */
+    #start-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #14050d 0%, #020205 70%);
+      z-index: 20;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+    }
+    #start-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .start-title {
+      color: #ffffff;
+      font-size: clamp(32px, 6.5vw, 56px);
+      font-weight: 800;
+      letter-spacing: 4px;
+      margin-bottom: 30px;
+      text-shadow:
+        0 0 8px #ffffff,
+        0 0 18px #ff1e56,
+        0 0 36px #ff0055,
+        0 0 70px #ff0055;
+      animation: titlePulse 2.5s infinite ease-in-out;
+    }
+    #play-btn {
+      width: 86px;
+      height: 86px;
+      border-radius: 50%;
+      background: rgba(255, 0, 85, 0.14);
+      border: 2.5px solid #ff7597;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow:
+        0 0 15px #ff1e56,
+        0 0 35px #ff0055,
+        0 0 60px rgba(255, 0, 85, 0.5),
+        inset 0 0 18px #ff1e56;
+      transition: transform 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+    }
+    #play-btn:hover, #play-btn:active {
+      transform: scale(1.12);
+      background: rgba(255, 0, 85, 0.32);
+      box-shadow:
+        0 0 22px #ffffff,
+        0 0 45px #ff1e56,
+        0 0 85px #ff0055,
+        inset 0 0 24px #ff7597;
+    }
+    #play-btn svg {
+      width: 34px;
+      height: 34px;
+      fill: #ffffff;
+      filter: drop-shadow(0 0 8px #ff0055) drop-shadow(0 0 16px #ff1e56);
+      margin-left: 4px;
+    }
+
+    @keyframes titlePulse {
+      0%, 100% { transform: scale(1); opacity: 0.94; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    /* Dolne przyciski */
+    #ui {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+      white-space: nowrap;
+    }
+    #ui.visible {
+      opacity: 0.9;
+      pointer-events: auto;
+    }
+    #ui.visible:hover {
+      opacity: 1;
+    }
+    .ctrl-btn {
+      background: rgba(12, 10, 20, 0.85);
+      border: 1.5px solid #ff4d79;
+      color: #fff0f3;
+      padding: 9px 16px;
+      border-radius: 22px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 0 14px rgba(255, 0, 85, 0.45), inset 0 0 8px rgba(255, 0, 85, 0.2);
+      backdrop-filter: blur(6px);
+      transition: all 0.2s ease;
+    }
+    .ctrl-btn:hover, .ctrl-btn:active {
+      background: rgba(255, 0, 85, 0.3);
+      border-color: #ffffff;
+      box-shadow: 0 0 22px rgba(255, 0, 85, 0.85);
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Podmień "piosenka.mp3" na nazwę swojego pliku audio -->
+  <audio id="bg-music" src="piosenka.mp3" preload="auto" loop></audio>
+
+  <div id="start-screen">
+    <div class="start-title">I Love You</div>
+    <button id="play-btn" aria-label="Odtwórz animację i muzykę" onclick="startExperience()">
+      <svg viewBox="0 0 24 24">
+        <polygon points="6,4 20,12 6,20"></polygon>
+      </svg>
+    </button>
+  </div>
+
+  <canvas id="heartCanvas"></canvas>
+
+  <div id="ui">
+    <button class="ctrl-btn" onclick="restartAnimation()">Odtwórz ponownie</button>
+    <button class="ctrl-btn" onclick="toggleTheme()">Zmień motyw</button>
+    <button class="ctrl-btn" id="mute-btn" onclick="toggleMute()">Dźwięk: WŁ</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('heartCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('start-screen');
+    const uiControls = document.getElementById('ui');
+    const bgMusic = document.getElementById('bg-music');
+    const muteBtn = document.getElementById('mute-btn');
+
+    const PHRASES = [
+      "I love you", "Kocham cię", "Te amo", "Je t'aime",
+      "Ti amo", "Eu te amo", "사랑해", "愛してる",
+      "Ich liebe dich", "Seni seviyorum", "我爱你", "أحبك",
+      "Σ' αγαπώ", "Ik hou van jou", "Jag älskar dig",
+      "Anh yêu em", "Aku cinta kamu", "Я тебе кохаю"
+    ];
+
+    const THEMES = [
+      {
+        aura: 'rgba(255, 0, 75, 0.14)',
+        palette: [
+          { neon: '#ff0044', core: '#ffd6e0', shadow: '#4a0014' },
+          { neon: '#ff1e7a', core: '#ffe0ee', shadow: '#4a0024' },
+          { neon: '#ff3355', core: '#ffdbe2', shadow: '#4a0814' },
+          { neon: '#d900ff', core: '#f6d6ff', shadow: '#380045' }
+        ],
+        bgHearts: ['#ff0055', '#ff2a85', '#d900ff', '#ff4d6d', '#9d4edd'],
+        centerNeon: '#ff0055',
+        centerCore: '#ffffff'
+      },
+      {
+        aura: 'rgba(217, 0, 255, 0.15)',
+        palette: [
+          { neon: '#ff0099', core: '#ffd6f0', shadow: '#450029' },
+          { neon: '#bf00ff', core: '#f2d6ff', shadow: '#320045' },
+          { neon: '#00e5ff', core: '#e0fcff', shadow: '#003b45' },
+          { neon: '#ff2a6d', core: '#ffe0ea', shadow: '#470018' }
+        ],
+        bgHearts: ['#ff0099', '#bf00ff', '#00e5ff', '#7209b7', '#f72585'],
+        centerNeon: '#d900ff',
+        centerCore: '#ffffff'
+      },
+      {
+        aura: 'rgba(255, 110, 0, 0.14)',
+        palette: [
+          { neon: '#ff5500', core: '#ffe6d6', shadow: '#451500' },
+          { neon: '#ffaa00', core: '#fff5d6', shadow: '#452c00' },
+          { neon: '#ff0055', core: '#ffd6e4', shadow: '#450016' },
+          { neon: '#ff7700', core: '#ffebd6', shadow: '#451f00' }
+        ],
+        bgHearts: ['#ff5500', '#ffaa00', '#ff0055', '#ffd166', '#fb5607'],
+        centerNeon: '#ff6600',
+        centerCore: '#ffffff'
+      }
+    ];
+
+    let currentThemeIndex = 0;
+    let width, height, dpr, baseScale;
+    let words = [];
+    let bgHearts = [];
+    let visibleCount = 0;
+    let centerTextAlpha = 0;
+    let centerRelY = 0;
+    let pointer = { x: -1000, y: -1000, active: false };
+    let pulsePhase = 0;
+    let isStarted = false;
+
+    function getParametricHeart(t) {
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = -(
+        13 * Math.cos(t) -
+        5 * Math.cos(2 * t) -
+        2 * Math.cos(3 * t) -
+        Math.cos(4 * t)
+      );
+      return { x, y };
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function initBgHearts() {
+      bgHearts = [];
+      const theme = THEMES[currentThemeIndex];
+      const count = Math.min(48, Math.floor((width * height) / 20000));
+
+      for (let i = 0; i < count; i++) {
+        bgHearts.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          size: 8 + Math.random() * 18,
+          speedY: 0.2 + Math.random() * 0.45,
+          swaySpeed: 0.008 + Math.random() * 0.015,
+          swayRange: 15 + Math.random() * 25,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.1 + Math.random() * 0.2,
+          color: theme.bgHearts[Math.floor(Math.random() * theme.bgHearts.length)]
+        });
+      }
+    }
+
+    function drawMiniHeart(ctx, x, y, size, color, alpha) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(size / 16, size / 16);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.bezierCurveTo(0, 0, -8, -4, -8, 2);
+      ctx.bezierCurveTo(-8, 7, 0, 12, 0, 15);
+      ctx.bezierCurveTo(0, 12, 8, 7, 8, 2);
+      ctx.bezierCurveTo(8, -4, 0, 0, 0, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function init() {
+      dpr = window.devicePixelRatio || 1;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      baseScale = Math.min(width / 36, height / 34);
+      initBgHearts();
+      buildHeartLayout();
+    }
+
+    function buildHeartLayout() {
+      words = [];
+      const theme = THEMES[currentThemeIndex];
+      const baseFontSize = Math.max(8, Math.round(baseScale * 0.48));
+      const centerFontSize = Math.round(baseFontSize * 1.6);
+
+      const samples = [];
+      const steps = 1200;
+      for (let i = 0; i < steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        samples.push(getParametricHeart(t));
+      }
+
+      const minY = -11.8;
+      const maxY = 16.8;
+      const totalRows = 23;
+      const rowStep = (maxY - minY) / (totalRows - 1);
+      const horizontalGap = baseFontSize * 0.82;
+
+      const centerRowIndex = 10;
+      centerRelY = (minY + centerRowIndex * rowStep) * baseScale;
+
+      ctx.font = `800 ${centerFontSize}px 'Segoe UI', Roboto, sans-serif`;
+      const centerTextWidth = ctx.measureText("I LOVE YOU").width;
+      const halfGap = centerTextWidth / 2 + horizontalGap * 1.35;
+
+      ctx.font = `700 ${baseFontSize}px 'Segoe UI', Roboto, sans-serif`;
+
+      let phraseIndex = 0;
+      const outlineWords = [];
+      const innerWords = [];
+
+      function populateSegment(segLeft, segRight, yPx, r, isLeftOfCenter, isRightOfCenter) {
+        const segWidth = segRight - segLeft;
+        if (segWidth < baseFontSize * 1.5) return;
+
+        const rowItems = [];
+        let usedWidth = 0;
+
+        while (true) {
+          const phrase = PHRASES[phraseIndex % PHRASES.length];
+          const textWidth = ctx.measureText(phrase).width;
+          const needed = rowItems.length === 0 ? textWidth : textWidth + horizontalGap;
+
+          if (usedWidth + needed <= segWidth) {
+            rowItems.push({ phrase, textWidth });
+            usedWidth += needed;
+            phraseIndex++;
+          } else {
+            break;
+          }
+        }
+
+        if (rowItems.length === 0) return;
+
+        let currentX;
+        if (isLeftOfCenter) {
+          currentX = segRight - usedWidth;
+        } else if (isRightOfCenter) {
+          currentX = segLeft;
+        } else {
+          currentX = segLeft + (segWidth - usedWidth) / 2;
+        }
+
+        rowItems.forEach((item, idx) => {
+          const xPx = currentX + item.textWidth / 2;
+
+          const isOuterLeft = (idx === 0 && !isRightOfCenter);
+          const isOuterRight = (idx === rowItems.length - 1 && !isLeftOfCenter);
+          const isOutline = isOuterLeft || isOuterRight || r === 0 || r >= totalRows - 2;
+
+          const depthLayer = isOutline ? 0 : (Math.random() < 0.45 ? 1 : 2);
+          const colorObj = theme.palette[Math.floor(Math.random() * theme.palette.length)];
+
+          let layerFontSize = baseFontSize;
+          let maxAlpha = 1;
+          let parallaxFactor = 1.0;
+
+          if (depthLayer === 0) {
+            layerFontSize = Math.round(baseFontSize * 1.06);
+            maxAlpha = 1.0;
+            parallaxFactor = 1.25;
+          } else if (depthLayer === 1) {
+            layerFontSize = Math.round(baseFontSize * 0.94);
+            maxAlpha = 0.82;
+            parallaxFactor = 0.85;
+          } else {
+            layerFontSize = Math.round(baseFontSize * 0.84);
+            maxAlpha = 0.62;
+            parallaxFactor = 0.55;
+          }
+
+          const wordObj = {
+            relX: xPx,
+            relY: yPx,
+            offsetX: 0,
+            offsetY: 0,
+            phrase: item.phrase,
+            colorObj,
+            fontSize: layerFontSize,
+            alpha: 0,
+            maxAlpha,
+            depthLayer,
+            parallaxFactor,
+            isOutline
+          };
+
+          if (isOutline) {
+            outlineWords.push(wordObj);
+          } else {
+            innerWords.push(wordObj);
+          }
+
+          currentX += item.textWidth + horizontalGap;
+        });
+      }
+
+      for (let r = 0; r < totalRows; r++) {
+        const y = minY + r * rowStep;
+        const yPx = y * baseScale;
+
+        const intersections = [];
+        for (let i = 0; i < samples.length; i++) {
+          const p1 = samples[i];
+          const p2 = samples[(i + 1) % samples.length];
+          if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+            const x = p1.x + ((y - p1.y) / (p2.y - p1.y)) * (p2.x - p1.x);
+            intersections.push(x);
+          }
+        }
+        intersections.sort((a, b) => a - b);
+
+        for (let k = 0; k < intersections.length - 1; k += 2) {
+          const leftPx = intersections[k] * baseScale;
+          const rightPx = intersections[k + 1] * baseScale;
+
+          if (r === centerRowIndex) {
+            populateSegment(leftPx, -halfGap, yPx, r, true, false);
+            populateSegment(halfGap, rightPx, yPx, r, false, true);
+          } else {
+            populateSegment(leftPx, rightPx, yPx, r, false, false);
+          }
+        }
+      }
+
+      outlineWords.sort((a, b) => {
+        const angleA = Math.atan2(a.relY - centerRelY, a.relX);
+        const angleB = Math.atan2(b.relY - centerRelY, b.relX);
+        return angleA - angleB;
+      });
+
+      shuffleArray(innerWords);
+      words = [...outlineWords, ...innerWords];
+    }
+
+    function startExperience() {
+      if (isStarted) return;
+      isStarted = true;
+
+      bgMusic.volume = 0.8;
+      bgMusic.play().catch(err => {
+        console.warn("Nie udało się uruchomić audio (sprawdź czy plik piosenka.mp3 istnieje):", err);
+      });
+
+      startScreen.classList.add('hidden');
+      uiControls.classList.add('visible');
+      animate();
+    }
+
+    function restartAnimation() {
+      visibleCount = 0;
+      centerTextAlpha = 0;
+      pulsePhase = 0;
+
+      bgMusic.currentTime = 0;
+      if (!bgMusic.muted) {
+        bgMusic.play().catch(() => {});
+      }
+
+      words.forEach(w => {
+        w.alpha = 0;
+        w.offsetX = 0;
+        w.offsetY = 0;
+      });
+      const outlineCount = words.filter(w => w.isOutline).length;
+      const outlinePart = words.slice(0, outlineCount);
+      const innerPart = shuffleArray(words.slice(outlineCount));
+      words = [...outlinePart, ...innerPart];
+    }
+
+    function toggleTheme() {
+      currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+      const theme = THEMES[currentThemeIndex];
+      words.forEach(w => {
+        w.colorObj = theme.palette[Math.floor(Math.random() * theme.palette.length)];
+      });
+      bgHearts.forEach(h => {
+        h.color = theme.bgHearts[Math.floor(Math.random() * theme.bgHearts.length)];
+      });
+    }
+
+    function toggleMute() {
+      bgMusic.muted = !bgMusic.muted;
+      muteBtn.textContent = bgMusic.muted ? 'Dźwięk: WYŁ' : 'Dźwięk: WŁ';
+    }
+
+    function drawNeonWord(w, x, y) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `700 ${w.fontSize}px 'Segoe UI', Roboto, sans-serif`;
+
+      ctx.globalAlpha = w.alpha * 0.75;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = w.colorObj.shadow;
+      const shadowOffset = w.depthLayer === 0 ? 5 : (w.depthLayer === 1 ? 3 : 2);
+      ctx.fillText(w.phrase, x + shadowOffset, y + shadowOffset + 1);
+
+      ctx.globalAlpha = w.alpha;
+      ctx.shadowColor = w.colorObj.neon;
+      ctx.shadowBlur = w.depthLayer === 0 ? 18 : 12;
+      ctx.fillStyle = w.colorObj.neon;
+      ctx.fillText(w.phrase, x, y);
+
+      ctx.globalAlpha = w.alpha * (w.depthLayer === 0 ? 0.95 : 0.7);
+      ctx.shadowColor = w.colorObj.neon;
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = w.colorObj.core;
+      ctx.fillText(w.phrase, x, y);
+
+      ctx.restore();
+    }
+
+    function animate() {
+      if (!isStarted) return;
+
+      const theme = THEMES[currentThemeIndex];
+      ctx.fillStyle = '#020205';
+      ctx.fillRect(0, 0, width, height);
+
+      for (let i = 0; i < bgHearts.length; i++) {
+        const h = bgHearts[i];
+        h.y -= h.speedY;
+        h.phase += h.swaySpeed;
+        const currentX = h.x + Math.sin(h.phase) * h.swayRange;
+
+        if (h.y < -30) {
+          h.y = height + 30;
+          h.x = Math.random() * width;
+        }
+        drawMiniHeart(ctx, currentX, h.y, h.size, h.color, h.alpha);
+      }
+
+      const originX = width / 2;
+      const originY = height / 2 - baseScale * 2.2;
+
+      const bgGlow = ctx.createRadialGradient(
+        originX, originY + centerRelY, baseScale * 1,
+        originX, originY + centerRelY, baseScale * 19
+      );
+      bgGlow.addColorStop(0, theme.aura);
+      bgGlow.addColorStop(1, 'rgba(2, 2, 5, 0)');
+      ctx.fillStyle = bgGlow;
+      ctx.fillRect(0, 0, width, height);
+
+      // Mikro korekta prędkości (0.31 zamiast 0.28)
+      if (visibleCount < words.length) {
+        visibleCount += 0.31;
+      } else {
+        if (centerTextAlpha < 1) {
+          centerTextAlpha = Math.min(1, centerTextAlpha + 0.015);
+        }
+        pulsePhase += 0.04;
+      }
+
+      const beat = visibleCount >= words.length
+        ? 1 + Math.pow(Math.sin(pulsePhase), 6) * 0.032
+        : 1;
+
+      const limit = Math.min(Math.floor(visibleCount), words.length);
+      const visibleWords = words.slice(0, limit);
+      visibleWords.sort((a, b) => b.depthLayer - a.depthLayer);
+
+      for (let i = 0; i < visibleWords.length; i++) {
+        const w = visibleWords[i];
+        if (w.alpha < w.maxAlpha) {
+          w.alpha = Math.min(w.maxAlpha, w.alpha + 0.025);
+        }
+
+        const targetX = originX + w.relX * beat;
+        const targetY = originY + w.relY * beat;
+
+        if (pointer.active) {
+          const dx = (targetX + w.offsetX) - pointer.x;
+          const dy = (targetY + w.offsetY) - pointer.y;
+          const dist = Math.hypot(dx, dy);
+          const radius = baseScale * 4.2;
+
+          if (dist < radius && dist > 0) {
+            const force = (radius - dist) / radius;
+            w.offsetX += (dx / dist) * force * 3.8 * w.parallaxFactor;
+            w.offsetY += (dy / dist) * force * 3.8 * w.parallaxFactor;
+          }
+        }
+
+        w.offsetX *= 0.9;
+        w.offsetY *= 0.9;
+
+        drawNeonWord(w, targetX + w.offsetX, targetY + w.offsetY);
+      }
+
+      if (centerTextAlpha > 0) {
+        const baseFontSize = Math.max(8, Math.round(baseScale * 0.48));
+        const centerFontSize = Math.round(baseFontSize * 1.6);
+        const cx = originX;
+        const cy = originY + centerRelY * beat;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `800 ${centerFontSize}px 'Segoe UI', Roboto, sans-serif`;
+
+        ctx.globalAlpha = centerTextAlpha * 0.85;
+        ctx.fillStyle = '#1a0008';
+        ctx.fillText("I LOVE YOU", cx + 6, cy + 7);
+
+        ctx.globalAlpha = centerTextAlpha;
+        ctx.shadowColor = theme.centerNeon;
+        ctx.shadowBlur = 28;
+        ctx.fillStyle = theme.centerNeon;
+        ctx.fillText("I LOVE YOU", cx, cy);
+
+        ctx.shadowColor = theme.centerNeon;
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = theme.centerNeon;
+        ctx.fillText("I LOVE YOU", cx, cy);
+
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = theme.centerCore;
+        ctx.fillText("I LOVE YOU", cx, cy);
+
+        ctx.restore();
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', init);
+
+    window.addEventListener('mousemove', e => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      pointer.active = true;
+    });
+
+    window.addEventListener('touchmove', e => {
+      if (e.touches.length > 0) {
+        pointer.x = e.touches[0].clientX;
+        pointer.y = e.touches[0].clientY;
+        pointer.active = true;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      pointer.active = false;
+    });
+
+    init();
+  </script>
+</body>
+</html>
