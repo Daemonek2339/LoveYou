@@ -136,7 +136,6 @@
 </head>
 <body>
 
-  <!-- Podmień "piosenka.mp3" na nazwę swojego pliku audio -->
   <audio id="bg-music" src="piosenka.mp3" preload="auto" loop></audio>
 
   <div id="start-screen">
@@ -164,7 +163,8 @@
     const bgMusic = document.getElementById('bg-music');
     const muteBtn = document.getElementById('mute-btn');
 
-    // Dokładny czas trwania budowania serca w sekundach (identyczny na każdym telefonie i PC)
+    // Dokładny czas trwania budowania serca w sekundach
+
     const BUILD_DURATION_SEC = 14.0;
     const CENTER_FADE_DURATION_SEC = 1.6;
 
@@ -537,7 +537,7 @@
     function animate(timestamp) {
       if (!isStarted) return;
 
-      // Rzeczywisty upływ czasu między klatkami w sekundach (zabezpieczony przed skokiem po zmianie karty)
+      // Rzeczywisty upływ czasu między klatkami w sekundach
       const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
       lastTimestamp = timestamp;
 
@@ -571,7 +571,8 @@
       ctx.fillStyle = bgGlow;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Postęp oparty o czas rzeczywisty (zawsze 14 sekund na telefonie 120Hz i PC 60Hz)
+      // 2. Postęp oparty o czas rzeczywisty
+
       if (progress < 1) {
         progress = Math.min(1, progress + dt / BUILD_DURATION_SEC);
       } else {
@@ -589,7 +590,7 @@
       const visibleWords = words.slice(0, limit);
       visibleWords.sort((a, b) => b.depthLayer - a.depthLayer);
 
-      // Sprężysty powrót po dotyku niezależny od FPS
+      // Sprężysty powrót po dotyku niezależny
       const damping = Math.pow(0.002, dt);
 
       for (let i = 0; i < visibleWords.length; i++) {
